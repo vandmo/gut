@@ -107,12 +107,37 @@ func (m model) updateForJob() (tea.Model, tea.Cmd) {
 	} else {
 		m.list.Title = fmt.Sprintf("Do you want to copy file %s", m.job.Name())
 		items := []list.Item{
-			item{id: "y", title: "(Y)es"},
 			item{id: "n", title: "(N)o"},
+			item{id: "y", title: "(Y)es"},
 		}
 		cmd := m.list.SetItems(items)
 		return m, cmd
 	}
+}
+
+func processLetter(m model, letter string) (tea.Model, tea.Cmd) {
+	switch letter {
+	case "y":
+		if m.job != nil && !m.job.entry.IsDir() {
+			return m, doCopy(m.source, m.job.Name())
+		}
+	case "n":
+		if m.job != nil {
+			m.job = m.job.prev
+			return m.updateForJob()
+		}
+	case "c":
+		if m.job != nil && m.job.entry.IsDir() {
+			return m, doCopy(m.source, m.job.Name())
+		}
+	case "a":
+		if m.job != nil && m.job.entry.IsDir() {
+			name := m.job.Name()
+			m.job = m.job.prev
+			return m, readDir(m.source, name)
+		}
+	}
+	return m, nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -121,25 +146,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch keypress := msg.String(); keypress {
 		case "ctrl+c":
 			return m, tea.Quit
-		case "y":
-			if m.job != nil && !m.job.entry.IsDir() {
-				return m, doCopy(m.source, m.job.Name())
+		case "y", "n", "c", "a":
+			return processLetter(m, keypress)
+		case "enter":
+			i, ok := m.list.SelectedItem().(item)
+			if ok {
+				return processLetter(m, i.id)
 			}
-		case "n":
-			if m.job != nil {
-				m.job = m.job.prev
-				return m.updateForJob()
-			}
-		case "c":
-			if m.job != nil && m.job.entry.IsDir() {
-				return m, doCopy(m.source, m.job.Name())
-			}
-		case "a":
-			if m.job != nil && m.job.entry.IsDir() {
-				name := m.job.Name()
-				m.job = m.job.prev
-				return m, readDir(m.source, name)
-			}
+			return nil, nil
 		}
 	case tea.WindowSizeMsg:
 		h, v := docStyle.GetFrameSize()
